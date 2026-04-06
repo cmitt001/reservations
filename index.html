@@ -253,204 +253,360 @@
   };
 
   const CAPS = { air: 54, inside: 74 };
-  const SITTINGS = {
-    breakfast: { label:'Breakfast', time:'8:00 AM – 10:30 AM', slots:['8:00 AM','8:30 AM','9:00 AM','9:30 AM','10:00 AM','10:30 AM'], highTraffic:false },
-    lunch:     { label:'Lunch',     time:'12:00 PM – 3:00 PM', slots:['12:00 PM','12:30 PM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM'], highTraffic:false },
-    evening:   { label:'Evening',   time:'4:00 PM – 7:00 PM',  slots:['4:00 PM','4:30 PM','5:00 PM','5:30 PM','6:00 PM','6:30 PM','7:00 PM'], highTraffic:false },
-    dinner:    { label:'Dinner',    time:'7:00 PM – 10:00 PM', slots:['7:00 PM','7:30 PM','8:00 PM','8:30 PM','9:00 PM','9:30 PM','10:00 PM'], highTraffic:true }
-  };
-  const SITTING_COLORS = {
-    air:    { breakfast:'#B8860B', lunch:'#E9A800', evening:'#D4780B', dinner:'#9A6200' },
-    inside: { breakfast:'#185FA5', lunch:'#3A8FE0', evening:'#0F4A80', dinner:'#5B4FCF' }
-  };
-  const AVATAR_CLS = {
-    air:    { breakfast:'av-ab', lunch:'av-al', evening:'av-ae', dinner:'av-ad' },
-    inside: { breakfast:'av-ib', lunch:'av-il', evening:'av-ie', dinner:'av-id' }
-  };
-  const BADGE_COLORS = {
-    air: { breakfast:'background:#FAEEDA;color:#633806;', lunch:'background:#F5E6A3;color:#412402;', evening:'background:#FAC775;color:#412402;', dinner:'background:#EF9F27;color:#2C1600;' },
-    inside:{ breakfast:'background:#E6F1FB;color:#0C447C;', lunch:'background:#B5D4F4;color:#042C53;', evening:'background:#DBEEFF;color:#042C53;', dinner:'background:#CECBF6;color:#26215C;' }
-  };
-  const CUTOFF = 17;
-
-  let db, reservations = {}, currentTab = 'all';
-
-  // 2. INITIALIZE
-  try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    
-    // Status Tracker
-    db.ref('.info/connected').on('value', snap => {
-      const online = snap.val();
-      document.getElementById('status-dot').className = 'status-dot' + (online?'':' offline');
-      document.getElementById('status-txt').textContent = online ? 'Live — all staff synced' : 'Connecting...';
-    });
-
-    // Real-time Sync
-    db.ref('reservations').on('value', snap => {
-      reservations = snap.val() || {};
-      renderAll();
-    });
-  } catch(e) { console.error(e); }
-
-  // 3. HELPERS
-  function resList() { return Object.values(reservations); }
-  function todayStr() { return new Date().toISOString().split('T')[0]; }
-  function initials(n) { return n.trim().split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?'; }
-  function formatDate(d) {
-    if (!d) return '';
-    return new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+const SITTINGS = {
+  breakfast: { label:'Breakfast', time:'8:00 AM – 10:30 AM', slots:['8:00 AM','8:30 AM','9:00 AM','9:30 AM','10:00 AM','10:30 AM'], highTraffic:false },
+  lunch:     { label:'Lunch',     time:'12:00 PM – 3:00 PM', slots:['12:00 PM','12:30 PM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM'], highTraffic:false },
+  evening:   { label:'Evening',   time:'4:00 PM – 7:00 PM',  slots:['4:00 PM','4:30 PM','5:00 PM','5:30 PM','6:00 PM','6:30 PM','7:00 PM'], highTraffic:false },
+  dinner:    { label:'Dinner',    time:'7:00 PM – 10:00 PM', slots:['7:00 PM','7:30 PM','8:00 PM','8:30 PM','9:00 PM','9:30 PM','10:00 PM'], highTraffic:true }
+};
+const SITTING_COLORS = {
+  air:    { breakfast:'#B8860B', lunch:'#E9A800', evening:'#D4780B', dinner:'#9A6200' },
+  inside: { breakfast:'#185FA5', lunch:'#3A8FE0', evening:'#0F4A80', dinner:'#5B4FCF' }
+};
+const AVATAR_CLS = {
+  air:    { breakfast:'av-ab', lunch:'av-al', evening:'av-ae', dinner:'av-ad' },
+  inside: { breakfast:'av-ib', lunch:'av-il', evening:'av-ie', dinner:'av-id' }
+};
+const BADGE_COLORS = {
+  air: {
+    breakfast:'background:#FAEEDA;color:#633806;',
+    lunch:'background:#F5E6A3;color:#412402;',
+    evening:'background:#FAC775;color:#412402;',
+    dinner:'background:#EF9F27;color:#2C1600;'
+  },
+  inside:{
+    breakfast:'background:#E6F1FB;color:#0C447C;',
+    lunch:'background:#B5D4F4;color:#042C53;',
+    evening:'background:#DBEEFF;color:#042C53;',
+    dinner:'background:#CECBF6;color:#26215C;'
   }
-  function bookedSeats(venue, date, sitting, excludeId) {
-    return resList().filter(r=>r.venue===venue&&r.date===date&&r.sitting===sitting&&r.status==='active'&&r.id!==excludeId).reduce((s,r)=>s+r.size,0);
+};
+const CUTOFF = 17;
+
+let db, reservations = {}, currentTab = 'all';
+
+// init Firebase
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  const connRef = firebase.database().ref('.info/connected');
+  connRef.on('value', snap => {
+    const online = snap.val();
+    document.getElementById('status-dot').className = 'status-dot' + (online?'':' offline');
+    document.getElementById('status-txt').textContent = online ? 'Live — all staff synced' : 'Offline';
+  });
+  db.ref('reservations').on('value', snap => {
+    reservations = snap.val() || {};
+    renderAll();
+  });
+} catch(e) {
+  document.getElementById('status-dot').className = 'status-dot offline';
+  document.getElementById('status-txt').textContent = 'Not connected — using local mode';
+  reservations = JSON.parse(localStorage.getItem('res_local') || '{}');
+  renderAll();
+}
+
+function saveLocal() { localStorage.setItem('res_local', JSON.stringify(reservations)); }
+
+function resList() { return Object.values(reservations); }
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function initials(n) { return n.trim().split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?'; }
+function formatDate(d) {
+  if (!d) return '';
+  return new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+}
+
+function bookedSeats(venue, date, sitting, excludeId) {
+  return resList().filter(r=>r.venue===venue&&r.date===date&&r.sitting===sitting&&r.status==='active'&&r.id!==excludeId).reduce((s,r)=>s+r.size,0);
+}
+
+function onFormChange() {
+  const venue   = document.getElementById('f-venue').value;
+  const sitting = document.getElementById('f-sitting').value;
+  const date    = document.getElementById('f-date').value;
+  const size    = parseInt(document.getElementById('f-size').value)||0;
+
+  document.getElementById('err-msg').style.display='none';
+  document.getElementById('warn-msg').style.display='none';
+
+  // same-day cutoff
+  if (date===todayStr()&&new Date().getHours()>=CUTOFF) {
+    const w=document.getElementById('warn-msg');
+    w.textContent='Same-day reservations are closed after 5:00 PM.';
+    w.style.display='block';
   }
 
-  // 4. RENDERING LOGIC (THE STUFF THAT WAS MISSING)
-  function renderAll() {
-    renderCapStrip();
-    if(currentTab === 'overview') {
-      renderOverview();
-    } else {
-      renderList();
-      renderStats();
-    }
-    updateDateFilter();
+  // populate arrival slots
+  const si = SITTINGS[sitting];
+  const arrSel = document.getElementById('f-arrival');
+  arrSel.innerHTML = '<option value="">Not specified</option>' + si.slots.map(s=>`<option>${s}</option>`).join('');
+
+  // arrival hint for dinner (high traffic)
+  const hint = document.getElementById('arrival-hint');
+  if (si.highTraffic) {
+    hint.textContent = 'High traffic sitting — please ask the guest their estimated arrival time.';
+    hint.style.display='block';
+  } else { hint.style.display='none'; }
+
+  if (!date) { document.getElementById('sstrip').style.display='none'; return; }
+
+  // show all 4 sittings strip
+  const sKeys = ['breakfast','lunch','evening','dinner'];
+  const strip = document.getElementById('sstrip');
+  strip.style.display='grid';
+  strip.innerHTML = sKeys.map(sk => {
+    const cap=CAPS[venue], bkd=bookedSeats(venue,date,sk,null), left=cap-bkd, pct=bkd/cap;
+    const isSel=sk===sitting;
+    const cls=pct>=1?'sbox-full':pct>=.75?'sbox-warn':'sbox-ok';
+    const sel=isSel?'sbox-sel':'';
+    return `<div class="sbox ${cls} ${sel}">
+      <div class="slabel">${SITTINGS[sk].label}</div>
+      <div class="sval">${left}/${cap} free</div>
+      <div class="ssub">${bkd} booked${isSel&&size?` +${size}`:''}${pct>=1?' · FULL':''}</div>
+    </div>`;
+  }).join('');
+}
+
+function initDate() {
+  const today=todayStr();
+  const di=document.getElementById('f-date');
+  di.value=today; di.min=today;
+  onFormChange();
+}
+
+function showErr(msg){const e=document.getElementById('err-msg');e.textContent=msg;e.style.display='block';}
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+
+function addReservation() {
+  const name   =document.getElementById('f-name').value.trim();
+  const phone  =document.getElementById('f-phone').value.trim();
+  const venue  =document.getElementById('f-venue').value;
+  const size   =parseInt(document.getElementById('f-size').value);
+  const date   =document.getElementById('f-date').value;
+  const sitting=document.getElementById('f-sitting').value;
+  const arrival=document.getElementById('f-arrival').value;
+  const notes  =document.getElementById('f-notes').value.trim();
+  const email  =document.getElementById('f-email').value.trim();
+  document.getElementById('err-msg').style.display='none';
+
+  if (!name)           {showErr('Guest name is required.');return;}
+  if (!phone)          {showErr('Contact number is required.');return;}
+  if (!size||size<1)   {showErr('Enter a valid party size.');return;}
+  if (!date)           {showErr('Select a date.');return;}
+  if (date===todayStr()&&new Date().getHours()>=CUTOFF){showErr('Same-day reservations are only accepted before 5:00 PM.');return;}
+  if (size>CAPS[venue]){showErr(`Party size exceeds ${venue==='air'?'Air Rooftop (54)':'Inside (74)'} capacity.`);return;}
+  const left=CAPS[venue]-bookedSeats(venue,date,sitting,null);
+  if (size>left)       {showErr(`Only ${left} seat${left!==1?'s':''} left for ${SITTINGS[sitting].label} in ${venue==='air'?'Air':'Inside'}.`);return;}
+
+  const rec={id:uid(),name,phone,email,venue,size,date,sitting,arrival,notes,status:'active',created:Date.now()};
+  if (db) {
+    db.ref('reservations/'+rec.id).set(rec).catch(e=>showErr('Save failed: '+e.message));
+  } else {
+    reservations[rec.id]=rec;
+    saveLocal();
+    renderAll();
   }
+  clearForm();
+}
 
-  function renderCapStrip() {
-    const today = todayStr();
-    const venues = ['air','inside'];
-    const sKeys = ['breakfast','lunch','evening','dinner'];
-    document.getElementById('cap-strip').innerHTML = venues.flatMap(v=>
-      sKeys.map(sk=>{
-        const cap=CAPS[v], bkd=bookedSeats(v,today,sk,null), left=cap-bkd;
-        const pct=Math.min(100,Math.round(bkd/cap*100));
-        const fillCls=`f-${v==='air'?'a':'i'}${sk[0]}`;
-        return `<div class="cap-card">
-          <div class="lbl">${v.toUpperCase()} · ${SITTINGS[sk].label}</div>
-          <div class="nums"><span class="big">${left}</span><span class="of">/ ${cap}</span></div>
-          <div class="bar"><div class="bar-f ${fillCls}" style="width:${pct}%"></div></div>
-        </div>`;
-      })
-    ).join('');
+function cancelRes(id){
+  if (db) db.ref('reservations/'+id+'/status').set('cancelled');
+  else { if(reservations[id]) reservations[id].status='cancelled'; saveLocal(); renderAll(); }
+}
+function deleteRes(id){
+  if (db) db.ref('reservations/'+id).remove();
+  else { delete reservations[id]; saveLocal(); renderAll(); }
+}
+
+function switchTab(tab,el){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const sr=document.getElementById('search-row'), ov=document.getElementById('ov-view');
+  const rl=document.getElementById('res-list'), st=document.getElementById('stats-row');
+  if(tab==='overview'){
+    sr.style.display='none'; ov.style.display='block'; rl.style.display='none'; st.style.display='none';
+    renderOverview();
+  } else {
+    sr.style.display='flex'; ov.style.display='none'; rl.style.display='flex'; st.style.display='grid';
+    renderList(); renderStats();
   }
+}
 
-  function renderList() {
-    const q = (document.getElementById('search-input').value||'').toLowerCase();
-    const fd = document.getElementById('filter-date').value;
-    const fs = document.getElementById('filter-sitting').value;
-    let list = resList().sort((a,b)=>b.created-a.created);
-
-    if(currentTab === 'air') list = list.filter(r=>r.venue==='air');
-    if(currentTab === 'inside') list = list.filter(r=>r.venue==='inside');
-    if(q) list = list.filter(r=>[r.name,r.phone].join(' ').toLowerCase().includes(q));
-    if(fd) list = list.filter(r=>r.date===fd);
-    if(fs) list = list.filter(r=>r.sitting===fs);
-
-    const el = document.getElementById('res-list');
-    if(!list.length) { el.innerHTML='<div class="empty">No reservations found.</div>'; return; }
-
-    el.innerHTML = list.map(r => {
-      const si = SITTINGS[r.sitting] || {label:r.sitting};
-      const avCls = (AVATAR_CLS[r.venue]||{})[r.sitting] || 'av-ab';
-      const bdClass = r.status==='cancelled'?'b-cancel':'badge';
-      return `<div class="res-card">
-        <div class="avatar ${avCls}">${initials(r.name)}</div>
-        <div class="ri">
-          <h4>${r.name} <span style="font-size:11px;color:var(--text3);">· ${r.size} guests</span></h4>
-          <p>${r.phone} · ${formatDate(r.date)}</p>
-          <div class="tags"><span class="${bdClass}">${r.venue.toUpperCase()} · ${si.label}</span></div>
-        </div>
-        <div class="card-actions">
-          <button class="icon-btn btn-sm" onclick="deleteRes('${r.id}')">🗑</button>
-        </div>
+function renderCapStrip(){
+  const today=todayStr();
+  const venues=['air','inside'];
+  const sKeys=['breakfast','lunch','evening','dinner'];
+  document.getElementById('cap-strip').innerHTML = venues.flatMap(v=>
+    sKeys.map(sk=>{
+      const cap=CAPS[v], bkd=bookedSeats(v,today,sk,null), left=cap-bkd;
+      const pct=Math.min(100,Math.round(bkd/cap*100));
+      const fillCls=`f-${v==='air'?'a':'i'}${sk[0]}`;
+      const vl=v==='air'?'Air':'Inside';
+      return `<div class="cap-card">
+        <div class="lbl">${vl} · ${SITTINGS[sk].label}</div>
+        <div class="nums"><span class="big">${left}</span><span class="of">/ ${cap}</span></div>
+        <div class="bar"><div class="bar-f ${fillCls}" style="width:${pct}%"></div></div>
       </div>`;
-    }).join('');
-  }
+    })
+  ).join('');
+}
 
-  function renderStats() {
-    const active = resList().filter(r=>r.status==='active');
-    document.getElementById('stats-row').innerHTML=`
-      <div class="stat"><div class="sl">Total Active</div><div class="sv">${active.length}</div></div>
-      <div class="stat"><div class="sl">Total Guests</div><div class="sv">${active.reduce((s,r)=>s+r.size,0)}</div></div>`;
-    document.getElementById('stats-row').style.display='grid';
-  }
+function renderStats(){
+  const active=resList().filter(r=>r.status==='active');
+  const today=todayStr();
+  document.getElementById('stats-row').innerHTML=`
+    <div class="stat"><div class="sl">Total active</div><div class="sv">${active.length}</div></div>
+    <div class="stat"><div class="sl">Total guests</div><div class="sv">${active.reduce((s,r)=>s+r.size,0)}</div></div>
+    <div class="stat"><div class="sl">Today's bookings</div><div class="sv">${active.filter(r=>r.date===today).length}</div></div>
+    <div class="stat"><div class="sl">Cancelled</div><div class="sv">${resList().filter(r=>r.status==='cancelled').length}</div></div>`;
+  document.getElementById('stats-row').style.display='grid';
+}
 
-  function renderOverview() {
-    const today = todayStr();
-    const dates = [...new Set([today,...resList().map(r=>r.date)])].sort().slice(0,7);
-    let html = `<div class="ov-grid">`;
-    ['air','inside'].forEach(venue => {
-      html += `<div class="ov-card"><h3>${venue.toUpperCase()}</h3>`;
-      dates.forEach(date => {
-        html += `<div class="ov-date">${formatDate(date)}</div>`;
-        ['breakfast','lunch','evening','dinner'].forEach(sk => {
-          const bkd=bookedSeats(venue,date,sk,null), cap=CAPS[venue];
-          html += `<div class="ov-row">${SITTINGS[sk].label}: ${bkd}/${cap} seats</div>`;
-        });
+function updateDateFilter(){
+  const sel=document.getElementById('filter-date');
+  const dates=[...new Set(resList().map(r=>r.date))].sort();
+  const cur=sel.value;
+  sel.innerHTML='<option value="">All dates</option>'+dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${formatDate(d)}</option>`).join('');
+}
+
+function renderList(){
+  updateDateFilter();
+  const q=(document.getElementById('search-input').value||'').toLowerCase();
+  const fd=document.getElementById('filter-date').value;
+  const fs=document.getElementById('filter-sitting').value;
+  let list=resList().sort((a,b)=>b.created-a.created);
+  if(currentTab==='air')    list=list.filter(r=>r.venue==='air');
+  if(currentTab==='inside') list=list.filter(r=>r.venue==='inside');
+  if(q)  list=list.filter(r=>[r.name,r.phone,r.email,r.date,r.notes].join(' ').toLowerCase().includes(q));
+  if(fd) list=list.filter(r=>r.date===fd);
+  if(fs) list=list.filter(r=>r.sitting===fs);
+  const el=document.getElementById('res-list');
+  if(!list.length){el.innerHTML='<div class="empty">No reservations found.</div>';return;}
+
+  el.innerHTML=list.map(r=>{
+    const si=SITTINGS[r.sitting]||{label:r.sitting};
+    const avCls=(AVATAR_CLS[r.venue]||{})[r.sitting]||'av-ab';
+    const bdStyle=r.status==='cancelled'?'':(BADGE_COLORS[r.venue]||{})[r.sitting]||'';
+    const bdClass=r.status==='cancelled'?'b-cancel':'badge';
+    const bdLabel=r.status==='cancelled'?'Cancelled':`${r.venue==='air'?'Air':'Inside'} · ${si.label}`;
+    const arrTag=r.arrival?`<span class="arrival-tag">Arrives ~${r.arrival}</span>`:'';
+    return `<div class="res-card">
+      <div class="avatar ${avCls}">${initials(r.name)}</div>
+      <div class="ri">
+        <h4>${r.name} <span style="font-size:11px;color:var(--text3);">· ${r.size} guest${r.size!==1?'s':''}</span></h4>
+        <p>${r.phone}${r.email?' · '+r.email:''}${r.notes?' · '+r.notes:''}</p>
+        <div class="tags">
+          <span class="${bdClass}" style="${bdStyle}">${bdLabel}</span>
+          ${arrTag}
+          <span style="font-size:11px;color:var(--text3);">${formatDate(r.date)}</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        ${r.status==='active'?`<button class="icon-btn btn-sm" title="Cancel" onclick="cancelRes('${r.id}')">✕</button>`:''}
+        <button class="icon-btn btn-sm" title="Delete" onclick="deleteRes('${r.id}')" style="font-size:13px;">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderOverview(){
+  const today=todayStr();
+  const dates=[...new Set([today,...resList().map(r=>r.date)])].sort().slice(0,14);
+  const now=new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'});
+
+  let html=`<div class="ov-toolbar">
+    <span style="font-size:13px;color:var(--text3);">Showing ${dates.length} date${dates.length!==1?'s':''} with activity</span>
+    <button class="btn btn-blue btn-sm" onclick="exportOverview()">Download HTML Report</button>
+  </div><div class="ov-grid">`;
+
+  ['air','inside'].forEach(venue=>{
+    const cap=CAPS[venue];
+    html+=`<div class="ov-card"><h3>${venue==='air'?'Air — Rooftop':'Inside'} <span style="font-size:13px;color:var(--text3);font-weight:400;">(${cap} seats)</span></h3>`;
+    dates.forEach(date=>{
+      html+=`<div class="ov-date">${formatDate(date)}${date===today?' — today':''}</div>`;
+      ['breakfast','lunch','evening','dinner'].forEach(sk=>{
+        const bkd=bookedSeats(venue,date,sk,null), left=cap-bkd, pct=bkd/cap;
+        const color=SITTING_COLORS[venue][sk];
+        const stCls=pct>=1?'st-full':pct>=.75?'st-warn':'st-ok';
+        const stTxt=pct>=1?'FULL':pct>=.75?'NEARLY FULL':'AVAILABLE';
+        html+=`<div class="ov-row">
+          <div class="ov-rh"><span class="ov-rname">${SITTINGS[sk].label}</span><span class="ov-rtime">${SITTINGS[sk].time}</span></div>
+          <div class="ov-bar"><div class="ov-barf" style="width:${Math.min(100,Math.round(pct*100))}%;background:${color};"></div></div>
+          <div class="ov-sub"><span class="ov-status ${stCls}">${stTxt}</span><span style="font-size:11px;color:var(--text3);">${bkd}/${cap} · ${left} left</span></div>
+        </div>`;
       });
-      html += `</div>`;
     });
-    document.getElementById('ov-view').innerHTML = html + `</div>`;
-  }
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+  document.getElementById('ov-view').innerHTML=html;
+}
 
-  // 5. INTERACTION FUNCTIONS
-  function switchTab(tab, el) {
-    currentTab = tab;
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('ov-view').style.display = tab==='overview'?'block':'none';
-    document.getElementById('res-list').style.display = tab==='overview'?'none':'flex';
-    renderAll();
-  }
+function exportOverview(){
+  const today=todayStr();
+  const dates=[...new Set([today,...resList().map(r=>r.date)])].sort().slice(0,14);
+  const now=new Date().toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'});
+  let rows='';
+  dates.forEach(date=>{
+    rows+=`<tr><td colspan="6" style="background:#f0f0f0;font-weight:600;padding:10px 14px;font-size:13px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid #ccc;">${formatDate(date)}${date===today?' — TODAY':''}</td></tr>`;
+    ['air','inside'].forEach(venue=>{
+      ['breakfast','lunch','evening','dinner'].forEach(sk=>{
+        const cap=CAPS[venue],bkd=bookedSeats(venue,date,sk,null),left=cap-bkd,pct=Math.round(bkd/cap*100);
+        const status=bkd>=cap?'FULL':pct>=75?'NEARLY FULL':'AVAILABLE';
+        const bg=bkd>=cap?'#FCEBEB':pct>=75?'#FAEEDA':'#EAF3DE';
+        const tc=bkd>=cap?'#501313':pct>=75?'#412402':'#173404';
+        const bc=bkd>=cap?'#E24B4A':pct>=75?'#EF9F27':'#639922';
+        rows+=`<tr style="border-bottom:1px solid #eee;">
+          <td style="padding:8px 14px;font-size:13px;font-weight:500;">${venue==='air'?'Air (Rooftop)':'Inside'}</td>
+          <td style="padding:8px 14px;font-size:13px;">${SITTINGS[sk].label}</td>
+          <td style="padding:8px 14px;font-size:12px;color:#666;">${SITTINGS[sk].time}</td>
+          <td style="padding:8px 14px;font-size:13px;">${bkd} / ${cap}</td>
+          <td style="padding:8px 14px;font-size:13px;">${left} remaining</td>
+          <td style="padding:8px 14px;"><span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;background:${bg};color:${tc};border:1.5px solid ${bc};">${status}</span></td>
+        </tr>`;
+      });
+    });
+  });
+  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Overview – ${now}</title>
+<style>body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:32px;background:#fff;color:#111;}
+h1{font-size:22px;font-weight:600;margin-bottom:4px;}.sub{font-size:13px;color:#666;margin-bottom:20px;}
+table{width:100%;border-collapse:collapse;}.legend{display:flex;gap:18px;margin-bottom:18px;font-size:13px;}
+.li{display:flex;align-items:center;gap:6px;}.dot{width:12px;height:12px;border-radius:3px;border:1.5px solid;display:inline-block;}
+thead tr{background:#111;color:#fff;}th{padding:9px 14px;text-align:left;font-size:12px;letter-spacing:.05em;}
+@media print{button{display:none;}}</style></head><body>
+<h1>Air &amp; Inside — Daily Overview</h1>
+<div class="sub">Generated: ${now} &nbsp;·&nbsp; Staff Portal</div>
+<div class="legend">
+  <div class="li"><span class="dot" style="background:#EAF3DE;border-color:#639922;"></span>Available</div>
+  <div class="li"><span class="dot" style="background:#FAEEDA;border-color:#EF9F27;"></span>Nearly full</div>
+  <div class="li"><span class="dot" style="background:#FCEBEB;border-color:#E24B4A;"></span>Full</div>
+</div>
+<table><thead><tr><th>Venue</th><th>Sitting</th><th>Time</th><th>Booked</th><th>Remaining</th><th>Status</th></tr></thead>
+<tbody>${rows}</tbody></table></body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`overview-${today}.html`;a.click();
+  URL.revokeObjectURL(url);
+}
 
-  function onFormChange() {
-    const venue = document.getElementById('f-venue').value;
-    const sitting = document.getElementById('f-sitting').value;
-    const date = document.getElementById('f-date').value;
-    const si = SITTINGS[sitting];
-    const arrSel = document.getElementById('f-arrival');
-    arrSel.innerHTML = '<option value="">Not specified</option>' + si.slots.map(s=>`<option>${s}</option>`).join('');
-    if(date) {
-        document.getElementById('sstrip').style.display='grid';
-        document.getElementById('sstrip').innerHTML = `<div class="sbox sbox-ok">Checking capacity for ${formatDate(date)}...</div>`;
-    }
-  }
+function clearForm(){
+  ['f-name','f-phone','f-size','f-notes','f-email'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('err-msg').style.display='none';
+  document.getElementById('warn-msg').style.display='none';
+  document.getElementById('sstrip').style.display='none';
+  initDate();
+}
 
-  function addReservation() {
-    const rec = {
-      id: Date.now().toString(36),
-      name: document.getElementById('f-name').value,
-      phone: document.getElementById('f-phone').value,
-      venue: document.getElementById('f-venue').value,
-      size: parseInt(document.getElementById('f-size').value),
-      date: document.getElementById('f-date').value,
-      sitting: document.getElementById('f-sitting').value,
-      status: 'active',
-      created: Date.now()
-    };
-    db.ref('reservations/'+rec.id).set(rec).then(() => clearForm());
-  }
+function renderAll(){
+  renderCapStrip();
+  if(currentTab==='overview') renderOverview();
+  else { renderList(); renderStats(); }
+}
 
-  function deleteRes(id) { if(confirm('Delete?')) db.ref('reservations/'+id).remove(); }
-  
-  function clearForm() {
-    ['f-name','f-phone','f-size'].forEach(id=>document.getElementById(id).value='');
-    renderAll();
-  }
-
-  function updateDateFilter() {
-    const sel = document.getElementById('filter-date');
-    const dates = [...new Set(resList().map(r=>r.date))].sort();
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">All dates</option>' + dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${formatDate(d)}</option>`).join('');
-  }
-
-  window.onload = () => {
-    document.getElementById('f-date').value = todayStr();
-    onFormChange();
-  };
+initDate();
 </script>
 </body>
 </html>
