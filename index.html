@@ -241,7 +241,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-  // 1. YOUR CONFIGURATION
+  // 1. CONFIGURATION
   const firebaseConfig = {
     apiKey: "AIzaSyBTFa8JNY2SoTwD0lYUHIVOBCiPWMqG_fo",
     authDomain: "resyst-reservation-system.firebaseapp.com",
@@ -252,7 +252,6 @@
     appId: "1:76917955238:web:c474390da268b81c72b267"
   };
 
-  // 2. SETTINGS & CONSTANTS
   const CAPS = { air: 54, inside: 74 };
   const SITTINGS = {
     breakfast: { label:'Breakfast', time:'8:00 AM – 10:30 AM', slots:['8:00 AM','8:30 AM','9:00 AM','9:30 AM','10:00 AM','10:30 AM'], highTraffic:false },
@@ -276,114 +275,180 @@
 
   let db, reservations = {}, currentTab = 'all';
 
-  // 3. INITIALIZE FIREBASE
+  // 2. INITIALIZE
   try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
     
     // Status Tracker
-    const connRef = firebase.database().ref('.info/connected');
-    connRef.on('value', snap => {
+    db.ref('.info/connected').on('value', snap => {
       const online = snap.val();
       document.getElementById('status-dot').className = 'status-dot' + (online?'':' offline');
       document.getElementById('status-txt').textContent = online ? 'Live — all staff synced' : 'Connecting...';
     });
 
-    // Real-time Data Sync
+    // Real-time Sync
     db.ref('reservations').on('value', snap => {
       reservations = snap.val() || {};
       renderAll();
     });
-  } catch(e) {
-    console.error("Firebase Connection Error:", e);
-    document.getElementById('status-txt').textContent = 'Error connecting...';
+  } catch(e) { console.error(e); }
+
+  // 3. HELPERS
+  function resList() { return Object.values(reservations); }
+  function todayStr() { return new Date().toISOString().split('T')[0]; }
+  function initials(n) { return n.trim().split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?'; }
+  function formatDate(d) {
+    if (!d) return '';
+    return new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  }
+  function bookedSeats(venue, date, sitting, excludeId) {
+    return resList().filter(r=>r.venue===venue&&r.date===date&&r.sitting===sitting&&r.status==='active'&&r.id!==excludeId).reduce((s,r)=>s+r.size,0);
   }
 
-  // 4. CORE FUNCTIONS
+  // 4. RENDERING LOGIC (THE STUFF THAT WAS MISSING)
   function renderAll() {
     renderCapStrip();
-    renderStats();
-    renderList();
-    if(currentTab === 'overview') renderOverview();
+    if(currentTab === 'overview') {
+      renderOverview();
+    } else {
+      renderList();
+      renderStats();
+    }
     updateDateFilter();
   }
 
-  function bookedSeats(venue, date, sitting, excludeId) {
-    return Object.values(reservations).filter(r=>r.venue===venue&&r.date===date&&r.sitting===sitting&&r.status==='active'&&r.id!==excludeId).reduce((s,r)=>s+r.size,0);
-  }
-
-  function onFormChange() {
-    const venue   = document.getElementById('f-venue').value;
-    const sitting = document.getElementById('f-sitting').value;
-    const date    = document.getElementById('f-date').value;
-    const size    = parseInt(document.getElementById('f-size').value)||0;
-
-    document.getElementById('err-msg').style.display='none';
-    document.getElementById('warn-msg').style.display='none';
-
-    // Arrival Slots
-    const si = SITTINGS[sitting];
-    const arrSel = document.getElementById('f-arrival');
-    arrSel.innerHTML = '<option value="">Not specified</option>' + si.slots.map(s=>`<option>${s}</option>`).join('');
-
-    if (!date) return;
-
-    // Show Capacity Strip
-    const strip = document.getElementById('sstrip');
-    strip.style.display='grid';
-    strip.innerHTML = ['breakfast','lunch','evening','dinner'].map(sk => {
-      const cap=CAPS[venue], bkd=bookedSeats(venue,date,sk,null), left=cap-bkd, pct=bkd/cap;
-      const isSel=sk===sitting;
-      const cls=pct>=1?'sbox-full':pct>=.75?'sbox-warn':'sbox-ok';
-      return `<div class="sbox ${cls} ${isSel?'sbox-sel':''}">
-        <div class="slabel">${SITTINGS[sk].label}</div>
-        <div class="sval">${left}/${cap} free</div>
-      </div>`;
-    }).join('');
-  }
-
-  function addReservation() {
-    const name = document.getElementById('f-name').value.trim();
-    const phone = document.getElementById('f-phone').value.trim();
-    const venue = document.getElementById('f-venue').value;
-    const size = parseInt(document.getElementById('f-size').value);
-    const date = document.getElementById('f-date').value;
-    const sitting = document.getElementById('f-sitting').value;
-    
-    if (!name || !phone || !size || !date) { alert("Please fill all required fields"); return; }
-
-    const id = Date.now().toString(36);
-    const rec = { id, name, phone, venue, size, date, sitting, status:'active', created:Date.now() };
-    
-    db.ref('reservations/' + id).set(rec).then(() => {
-      clearForm();
-    });
-  }
-
-  function clearForm(){
-    ['f-name','f-phone','f-size','f-notes','f-email'].forEach(id=>document.getElementById(id).value='');
-    onFormChange();
-  }
-
-  function renderCapStrip(){
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('cap-strip').innerHTML = ['air','inside'].flatMap(v=>
-      ['breakfast','lunch','evening','dinner'].map(sk=>{
+  function renderCapStrip() {
+    const today = todayStr();
+    const venues = ['air','inside'];
+    const sKeys = ['breakfast','lunch','evening','dinner'];
+    document.getElementById('cap-strip').innerHTML = venues.flatMap(v=>
+      sKeys.map(sk=>{
         const cap=CAPS[v], bkd=bookedSeats(v,today,sk,null), left=cap-bkd;
-        return `<div class="cap-card"><div class="lbl">${v.toUpperCase()} · ${sk}</div><div class="nums"><span class="big">${left}</span><span class="of">/ ${cap}</span></div></div>`;
+        const pct=Math.min(100,Math.round(bkd/cap*100));
+        const fillCls=`f-${v==='air'?'a':'i'}${sk[0]}`;
+        return `<div class="cap-card">
+          <div class="lbl">${v.toUpperCase()} · ${SITTINGS[sk].label}</div>
+          <div class="nums"><span class="big">${left}</span><span class="of">/ ${cap}</span></div>
+          <div class="bar"><div class="bar-f ${fillCls}" style="width:${pct}%"></div></div>
+        </div>`;
       })
     ).join('');
   }
 
-  function renderStats(){ /* Logic for stats box */ }
-  function renderList(){ /* Logic for drawing the cards */ }
-  function switchTab(t, el){ /* Tab logic */ }
-  function updateDateFilter(){ /* Filter logic */ }
+  function renderList() {
+    const q = (document.getElementById('search-input').value||'').toLowerCase();
+    const fd = document.getElementById('filter-date').value;
+    const fs = document.getElementById('filter-sitting').value;
+    let list = resList().sort((a,b)=>b.created-a.created);
 
-  // Start the page
-  window.onload = function() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('f-date').value = today;
+    if(currentTab === 'air') list = list.filter(r=>r.venue==='air');
+    if(currentTab === 'inside') list = list.filter(r=>r.venue==='inside');
+    if(q) list = list.filter(r=>[r.name,r.phone].join(' ').toLowerCase().includes(q));
+    if(fd) list = list.filter(r=>r.date===fd);
+    if(fs) list = list.filter(r=>r.sitting===fs);
+
+    const el = document.getElementById('res-list');
+    if(!list.length) { el.innerHTML='<div class="empty">No reservations found.</div>'; return; }
+
+    el.innerHTML = list.map(r => {
+      const si = SITTINGS[r.sitting] || {label:r.sitting};
+      const avCls = (AVATAR_CLS[r.venue]||{})[r.sitting] || 'av-ab';
+      const bdClass = r.status==='cancelled'?'b-cancel':'badge';
+      return `<div class="res-card">
+        <div class="avatar ${avCls}">${initials(r.name)}</div>
+        <div class="ri">
+          <h4>${r.name} <span style="font-size:11px;color:var(--text3);">· ${r.size} guests</span></h4>
+          <p>${r.phone} · ${formatDate(r.date)}</p>
+          <div class="tags"><span class="${bdClass}">${r.venue.toUpperCase()} · ${si.label}</span></div>
+        </div>
+        <div class="card-actions">
+          <button class="icon-btn btn-sm" onclick="deleteRes('${r.id}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderStats() {
+    const active = resList().filter(r=>r.status==='active');
+    document.getElementById('stats-row').innerHTML=`
+      <div class="stat"><div class="sl">Total Active</div><div class="sv">${active.length}</div></div>
+      <div class="stat"><div class="sl">Total Guests</div><div class="sv">${active.reduce((s,r)=>s+r.size,0)}</div></div>`;
+    document.getElementById('stats-row').style.display='grid';
+  }
+
+  function renderOverview() {
+    const today = todayStr();
+    const dates = [...new Set([today,...resList().map(r=>r.date)])].sort().slice(0,7);
+    let html = `<div class="ov-grid">`;
+    ['air','inside'].forEach(venue => {
+      html += `<div class="ov-card"><h3>${venue.toUpperCase()}</h3>`;
+      dates.forEach(date => {
+        html += `<div class="ov-date">${formatDate(date)}</div>`;
+        ['breakfast','lunch','evening','dinner'].forEach(sk => {
+          const bkd=bookedSeats(venue,date,sk,null), cap=CAPS[venue];
+          html += `<div class="ov-row">${SITTINGS[sk].label}: ${bkd}/${cap} seats</div>`;
+        });
+      });
+      html += `</div>`;
+    });
+    document.getElementById('ov-view').innerHTML = html + `</div>`;
+  }
+
+  // 5. INTERACTION FUNCTIONS
+  function switchTab(tab, el) {
+    currentTab = tab;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('ov-view').style.display = tab==='overview'?'block':'none';
+    document.getElementById('res-list').style.display = tab==='overview'?'none':'flex';
+    renderAll();
+  }
+
+  function onFormChange() {
+    const venue = document.getElementById('f-venue').value;
+    const sitting = document.getElementById('f-sitting').value;
+    const date = document.getElementById('f-date').value;
+    const si = SITTINGS[sitting];
+    const arrSel = document.getElementById('f-arrival');
+    arrSel.innerHTML = '<option value="">Not specified</option>' + si.slots.map(s=>`<option>${s}</option>`).join('');
+    if(date) {
+        document.getElementById('sstrip').style.display='grid';
+        document.getElementById('sstrip').innerHTML = `<div class="sbox sbox-ok">Checking capacity for ${formatDate(date)}...</div>`;
+    }
+  }
+
+  function addReservation() {
+    const rec = {
+      id: Date.now().toString(36),
+      name: document.getElementById('f-name').value,
+      phone: document.getElementById('f-phone').value,
+      venue: document.getElementById('f-venue').value,
+      size: parseInt(document.getElementById('f-size').value),
+      date: document.getElementById('f-date').value,
+      sitting: document.getElementById('f-sitting').value,
+      status: 'active',
+      created: Date.now()
+    };
+    db.ref('reservations/'+rec.id).set(rec).then(() => clearForm());
+  }
+
+  function deleteRes(id) { if(confirm('Delete?')) db.ref('reservations/'+id).remove(); }
+  
+  function clearForm() {
+    ['f-name','f-phone','f-size'].forEach(id=>document.getElementById(id).value='');
+    renderAll();
+  }
+
+  function updateDateFilter() {
+    const sel = document.getElementById('filter-date');
+    const dates = [...new Set(resList().map(r=>r.date))].sort();
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All dates</option>' + dates.map(d=>`<option value="${d}"${d===cur?' selected':''}>${formatDate(d)}</option>`).join('');
+  }
+
+  window.onload = () => {
+    document.getElementById('f-date').value = todayStr();
     onFormChange();
   };
 </script>
