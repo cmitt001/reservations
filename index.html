@@ -237,32 +237,23 @@
 </div>
 
 <!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <script>
 // ============================================================
-// FIREBASE CONFIG — replace with your own from Firebase console
+// PASTE YOUR FIREBASE CONFIG BOX BELOW THIS LINE
 // ============================================================
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTFa8JNY2SoTwD0lYUHIVOBCiPWMqG_fo",
-    authDomain: "resyst-reservation-system.firebaseapp.com",
-    databaseURL: "https://resyst-reservation-system-default-rtdb.firebaseio.com/",
-    projectId: "resyst-reservation-system",
-    storageBucket: "resyst-reservation-system.firebasestorage.app",
-    messagingSenderId: "76917955238",
-    appId: "1:76917955238:web:c474390da268b81c72b267",
-    measurementId: "G-HYJLRLMD14"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyBTFa8JNY2SoTwD0lYUHIVOBCiPWMqG_fo",
+  authDomain: "resyst-reservation-system.firebaseapp.com",
+  databaseURL: "https://resyst-reservation-system-default-rtdb.firebaseio.com",
+  projectId: "resyst-reservation-system",
+  storageBucket: "resyst-reservation-system.firebasestorage.app",
+  messagingSenderId: "76917955238",
+  appId: "1:76917955238:web:c474390da268b81c72b267",
+  measurementId: "G-HYJLRLMD14"
+};
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
