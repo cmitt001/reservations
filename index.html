@@ -237,22 +237,25 @@
 </div>
 
 <!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-// ============================================================
-// PASTE YOUR FIREBASE CONFIG BOX BELOW THIS LINE
-// ============================================================
-const firebaseConfig = {
+  // Your config stays here
+  const firebaseConfig = {
   apiKey: "AIzaSyBTFa8JNY2SoTwD0lYUHIVOBCiPWMqG_fo",
   authDomain: "resyst-reservation-system.firebaseapp.com",
   databaseURL: "https://resyst-reservation-system-default-rtdb.firebaseio.com",
   projectId: "resyst-reservation-system",
   storageBucket: "resyst-reservation-system.firebasestorage.app",
   messagingSenderId: "76917955238",
-  appId: "1:76917955238:web:c474390da268b81c72b267",
-  measurementId: "G-HYJLRLMD14"
+  appId: "1:76917955238:web:c474390da268b81c72b267"
+};
+
+  // This line MUST come after the scripts above
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+</script>
 };
 
   // Initialize Firebase
